@@ -1,5 +1,7 @@
 # Enforce AI Attribution in Git Commits (Stop Lying with Model: none)
 
+[![ai-gate](https://github.com/alexisromtz-lab/platino-ai-gate/actions/workflows/ai-gate.yml/badge.svg)](https://github.com/alexisromtz-lab/platino-ai-gate/actions/workflows/ai-gate.yml)
+
 Two git hooks that make every commit declare **which AI model wrote it** — and reject the one value that makes the declaration worthless.
 
 ![Demo: an invalid commit is rejected, a declared one goes through](docs/demo.gif)
@@ -93,7 +95,12 @@ No reason, no exemption. Wrong field, no exemption. Prefix matches are not honou
 
 `git commit --no-verify` skips `commit-msg` (git simply never invokes it). It changes **when** the omission is discovered, not **whether**: `pre-push` still refuses the push. If you also skip the push hook, you have left the gate, and that is a policy decision your reviewers can see.
 
-CI is the enforcement point that cannot be skipped locally:
+CI is the enforcement point that cannot be skipped locally. This repository runs [`.github/workflows/ai-gate.yml`](.github/workflows/ai-gate.yml) on every push and pull request, in two jobs you can copy as-is:
+
+- **`tests`** — the falsifier suite: `python3 -m pytest tools/hooks/tests -q`.
+- **`self-test`** — copies the gate into a scratch repo, activates it with `setup.sh`, and then tries every lie in order: `Model: none`, no trailer, an id outside the allowlist, a trailer buried in prose. All four must be rejected, a declared commit must pass, `pre-push` must pass on that history, and a commit made with `--no-verify` must still be blocked at push time.
+
+For the smallest adopter check, the hook reads its ref list on stdin exactly as git supplies it:
 
 ```yaml
 - name: AI attribution gate

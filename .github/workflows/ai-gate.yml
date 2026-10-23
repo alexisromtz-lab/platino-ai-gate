@@ -1,0 +1,76 @@
+# HUELLA AIATTRIBUTIONGATECIWORKFLOW
+name: ai-gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: hook test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the falsifiers
+        run: python3 -m pytest tools/hooks/tests -q
+
+  self-test:
+    name: live gate in a scratch repo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gate
+      - name: Adopt the gate, then try to lie
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          work="$RUNNER_TEMP/adopter"
+          mkdir -p "$work/tools"
+          cp -r gate/tools/hooks "$work/tools/hooks"
+          printf 'none\nopenai/OpenAI/gpt-6-luna\n' > "$work/tools/hooks/models.txt"
+
+          cd "$work"
+          git init -q -b main
+          git config user.email gate@example.com
+          git config user.name "Gate Self-Test"
+          git commit -q --allow-empty -m "epoch: history this gate is responsible for starts after this"
+          git tag hooks-epoch
+          bash tools/hooks/setup.sh
+
+          reject() {
+            local label="$1"; shift
+            if git commit -q --allow-empty -m "$1" 2>/tmp/out; then
+              echo "FAIL ($label): commit was accepted"; cat /tmp/out; exit 1
+            fi
+            echo "ok ($label): rejected"
+          }
+
+          reject "Model: none on real code" $'feat: add parser\n\nModel: none'
+
+          reject "no trailer at all" 'feat: add parser'
+
+          reject "value outside the allowlist" $'feat: add parser\n\nModel: gpt-4o'
+
+          reject "trailer buried in prose" $'feat: add parser\n\nWe ran Model: openai/OpenAI/gpt-6-luna on this.\n\nMore text after it.'
+
+          if ! git commit -q --allow-empty -m $'feat: add parser\n\nModel: openai/OpenAI/gpt-6-luna' 2>/tmp/out; then
+            echo "FAIL (declared commit): rejected"; cat /tmp/out; exit 1
+          fi
+          echo "ok (declared commit): accepted"
+
+          zeros=$(printf '0%.0s' {1..40})
+          if ! echo "refs/heads/main $(git rev-parse HEAD) refs/heads/main $zeros" | bash tools/hooks/pre-push 2>/tmp/out; then
+            echo "FAIL (pre-push on compliant history): blocked"; cat /tmp/out; exit 1
+          fi
+          echo "ok (pre-push on compliant history): passed"
+
+          if git commit -q --no-verify --allow-empty -m $'feat: bypassed\n\nModel: none'; then
+            if echo "refs/heads/main $(git rev-parse HEAD) refs/heads/main $zeros" | bash tools/hooks/pre-push 2>/tmp/out; then
+              echo "FAIL (bypass): --no-verify escaped the push gate"; cat /tmp/out; exit 1
+            fi
+            echo "ok (bypass): --no-verify caught by pre-push"
+          else
+            echo "FAIL (bypass): could not create the bypassed commit"; exit 1
+          fi

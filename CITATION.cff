@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this gate in your repositories, cite it as below."
+title: "platino-ai-gate"
+abstract: >-
+  Two git hooks (commit-msg and pre-push) that require every commit to declare
+  which AI model produced it, and reject "Model: none" on any commit that is not
+  a merge, a revert or automation. The model allowlist, the exemption file and
+  the falsifier test suite ship with the hooks.
+type: software
+authors:
+  - family-names: "Román"
+    given-names: "Alexis"
+    orcid: "https://orcid.org/0009-0001-9116-075X"
+version: "1.0.0"
+date-released: "2026-10-23"
+license: Apache-2.0
+repository-code: "https://github.com/alexisromtz-lab/platino-ai-gate"
+url: "https://github.com/alexisromtz-lab/platino-ai-gate"
+keywords:
+  - ai-attribution
+  - ai-governance
+  - git-hooks
+  - commit-hooks
+  - compliance
+references:
+  - type: generic
+    title: "platino-labs — measured corpus"
+    doi: "10.5281/zenodo.23288831"
+    url: "https://doi.org/10.5281/zenodo.23288831"
+    authors:
+      - family-names: "Román"
+        given-names: "Alexis"
+        orcid: "https://orcid.org/0009-0001-9116-075X"
