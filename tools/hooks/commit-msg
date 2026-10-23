@@ -3,6 +3,7 @@
 #
 # HUELLA-COMMITMSG-MODEL-20261022
 # HUELLA-COMMITMSG-EN-20261023
+# HUELLA-COMMITMSG-PATH-20261023
 #
 # Why it exists: pre-push discovers a missing Model: trailer once the commit is
 # already in history. Fixing it there means rewriting every later commit
@@ -74,7 +75,7 @@ reject() {
   echo "" >&2
   echo "The Model: trailer declares which model wrote the commit. It goes in the" >&2
   echo "FINAL block of the message (last paragraph, next to Co-authored-by), not in" >&2
-  echo "the body, and with no blank line in between. Valid ids ($MODELS_FILE):" >&2
+  echo "the body, and with no blank line in between. Valid ids (${MODELS_FILE#"$ROOT"/}):" >&2
   grep -v '^[[:space:]]*\(#\|$\)' "$MODELS_FILE" | sed 's/^/  /' >&2
   echo "" >&2
   echo "Example:" >&2
