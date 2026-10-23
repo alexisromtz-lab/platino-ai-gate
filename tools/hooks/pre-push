@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
-# Gate de atribución: todo commit posterior a la época declara su modelo.
+# Attribution gate: every commit after the epoch declares its model.
 #
-# NO usar `cmd | while ...; do exit 1; done`: el exit mata el subshell y el RC
-# se pierde (el gate deja de bloquear en cuanto se añade un echo al final).
-# bad=0 acumula, exit $bad al final. Tampoco `grep -c` (RC 1 con 0 matches
-# aborta bajo set -e); los recuentos van con awk.
+# HUELLA-PREPUSH-EN-20261023
 #
-# Invariante: toda línea ^Model: del mensaje es trailer del bloque final y todo
-# trailer Model: tiene valor en tools/hooks/models.txt. Con más de un Model:
-# se exige exactamente un Squash-Reason: no vacío.
+# Do NOT use `cmd | while ...; do exit 1; done`: the exit kills the subshell and
+# the exit code is lost (the gate stops blocking the moment an echo is added
+# after the loop). bad=0 accumulates, exit $bad at the end. Nor `grep -c` (RC 1
+# with zero matches aborts under set -e); every count runs awk.
+#
+# Invariant: every ^Model: line of the message is a trailer of the final block,
+# and every Model: trailer has a value listed in tools/hooks/models.txt. With
+# more than one Model: exactly one non-empty Squash-Reason: is required.
 set -uo pipefail
 
 ROOT=$(git rev-parse --show-toplevel) || exit 1
 MODELS_FILE="$ROOT/tools/hooks/models.txt"
-[ -f "$MODELS_FILE" ] || { echo "models.txt ausente: $MODELS_FILE" >&2; exit 1; }
+[ -f "$MODELS_FILE" ] || { echo "models.txt missing: $MODELS_FILE" >&2; exit 1; }
 
-# Exención declarada: una línea por SHA, formato <sha> TAB <razón>.
-# Ausencia del archivo = sin exenciones (el gate queda estricto, nunca más laxo).
-# Una línea sin razón, o con el SHA en otro campo, no se honra: una exención no
-# puede entrar sin motivo escrito ni por parecido de prefijo.
+# Declared exemption: one line per SHA, format <sha> TAB <reason>.
+# No file at all = no exemptions (the gate stays strict, never laxer).
+# A line without a reason, or with the SHA in another field, is not honoured: an
+# exemption cannot enter without a written reason, nor by prefix similarity.
 EXEMPT_FILE="$ROOT/tools/hooks/epoch-exempt.txt"
-es_bot_email() {
+is_bot_email() {
   local email
   email=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
   case "$email" in
@@ -29,7 +31,7 @@ es_bot_email() {
   esac
 }
 
-exento() {
+exempt() {
   [ -f "$EXEMPT_FILE" ] || return 1
   awk -F'\t' -v h="$1" '
     /^[[:space:]]*#/ { next }
@@ -40,10 +42,10 @@ exento() {
 }
 
 EPOCH=$(git rev-parse -q --verify 'refs/tags/hooks-epoch^{commit}') ||
-  { echo "hooks-epoch ausente: git fetch --tags" >&2; exit 1; }
+  { echo "hooks-epoch tag missing (run: git fetch --tags)" >&2; exit 1; }
 
-VALORES=$(mktemp "${TMPDIR:-/tmp}/models_vals.XXXXXX") || exit 1
-trap 'rm -f "$VALORES"' EXIT
+VALUES=$(mktemp "${TMPDIR:-/tmp}/models_vals.XXXXXX") || exit 1
+trap 'rm -f "$VALUES"' EXIT
 
 bad=0
 scanned=0
@@ -52,19 +54,19 @@ exempted=0
 while read -r _local_ref local_sha _remote_ref _remote_sha; do
   case "${local_sha:-}" in ''|0000000000000000000000000000000000000000) continue ;; esac
   # HUELLA-PREPUSH-MAIN-COMMIT-BRANCH-20261022
-  # Un commit del mecanismo debe ser alcanzable desde main antes de publicar.
+  # A mechanism commit must be reachable from main before it is published.
   for h in $(git rev-list "$EPOCH..$local_sha"); do
-    exento "$h" && continue
+    exempt "$h" && continue
     if git diff-tree --root --no-commit-id --name-only -r -m "$h" |
       grep -qE '^(AGENTS\.md|SUCIOS\.md|certificados/|docs/)'; then
       if ! git branch --contains "$h" --format='%(refname:short)' | grep -qxF main; then
-        echo "RECHAZO fuera_de_main (commit de mecanismo): $h" >&2
+        echo "REJECTED outside_main (mechanism commit): $h" >&2
         bad=1
       fi
     fi
   done
   for h in $(git rev-list --no-merges "$EPOCH..$local_sha"); do
-    if exento "$h"; then
+    if exempt "$h"; then
       exempted=$((exempted + 1))
       continue
     fi
@@ -79,36 +81,36 @@ while read -r _local_ref local_sha _remote_ref _remote_sha; do
     n_sq_empty=$(printf '%s\n' "$tr" | awk -F': ' '/^Squash-Reason:/ && $2 !~ /[^[:space:]]/ {c++} END{print c+0}')
 
     if [ "$n_all" -eq 0 ]; then
-      echo "RECHAZO sin Model: $h" >&2; bad=1; continue
+      echo "REJECTED missing Model: $h" >&2; bad=1; continue
     fi
     if [ "$n_all" -ne $((n_tr + n_tr_empty)) ]; then
-      echo "RECHAZO Model: en prosa (lineas=$n_all trailers=$((n_tr + n_tr_empty))): $h" >&2
+      echo "REJECTED Model: is in the body (prose) (lines=$n_all trailers=$((n_tr + n_tr_empty))): $h" >&2
       bad=1; continue
     fi
     if [ "$n_tr_empty" -gt 0 ]; then
-      echo "RECHAZO Model: vacio: $h" >&2; bad=1; continue
+      echo "REJECTED Model: is empty: $h" >&2; bad=1; continue
     fi
     if [ "$n_tr" -gt 1 ] && { [ "$n_sq" -ne 1 ] || [ "$n_sq_empty" -ne 0 ]; }; then
-      echo "RECHAZO squash sin Squash-Reason unico no vacio (ok=$n_sq vacios=$n_sq_empty modelos=$n_tr): $h" >&2
+      echo "REJECTED squash without exactly one non-empty Squash-Reason: (ok=$n_sq empty=$n_sq_empty models=$n_tr): $h" >&2
       bad=1; continue
     fi
 
-    printf '%s\n' "$tr" | awk -F': ' '/^Model:/ {print $2}' > "$VALORES"
+    printf '%s\n' "$tr" | awk -F': ' '/^Model:/ {print $2}' > "$VALUES"
     while IFS= read -r m; do
       if [ "$m" = none ]; then
         subject=$(git log -1 --format=%s "$h")
         author_email=$(git log -1 --format=%ae "$h")
-        if [[ "$subject" != Revert\ * ]] && ! es_bot_email "$author_email"; then
-          echo "RECHAZO Model: none no es válido para un commit con código. Declara tu modelo real: $h" >&2
+        if [[ "$subject" != Revert\ * ]] && ! is_bot_email "$author_email"; then
+          echo "REJECTED Model: none is not valid for a commit with code. Declare the model that actually wrote it: $h" >&2
           bad=1
         fi
       else
         grep -qxF -- "$m" "$MODELS_FILE" ||
-          { echo "RECHAZO Model '$m' no en models.txt: $h" >&2; bad=1; }
+          { echo "REJECTED Model '$m' is not in models.txt: $h" >&2; bad=1; }
       fi
-    done < "$VALORES"
+    done < "$VALUES"
   done
 done
 
-echo "EPOCH: $(git rev-parse --short "$EPOCH") . SCANNED: $scanned . EXENTOS: $exempted"
+echo "EPOCH: $(git rev-parse --short "$EPOCH") . SCANNED: $scanned . EXEMPTED: $exempted"
 exit $bad

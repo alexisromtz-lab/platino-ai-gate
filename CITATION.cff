@@ -11,7 +11,7 @@ authors:
   - family-names: "Román"
     given-names: "Alexis"
     orcid: "https://orcid.org/0009-0001-9116-075X"
-version: "1.0.0"
+version: "1.0.1"
 date-released: "2026-10-23"
 license: Apache-2.0
 repository-code: "https://github.com/alexisromtz-lab/platino-ai-gate"
@@ -31,3 +31,4 @@ references:
       - family-names: "Román"
         given-names: "Alexis"
         orcid: "https://orcid.org/0009-0001-9116-075X"
+# HUELLA-CITATION-101-20261023

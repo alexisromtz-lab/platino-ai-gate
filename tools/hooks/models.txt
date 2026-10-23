@@ -1,4 +1,6 @@
-# Enum of models accepted in the Model: trailer.
+# Allowlist of models accepted in the Model: trailer.
+#
+# HUELLA-MODELS-ARMED-20261023
 #
 # One entry per model, written as the EXACT id your model picker emits
 # (openai/OpenAI/gpt-6-luna), NOT the display name ("ChatGPT 6 Luna").
@@ -10,17 +12,17 @@
 #     and bots/automations identified by the author email. Any other commit,
 #     even an empty one, must declare a real model.
 #
-# This file ships with only `none` on purpose: an empty enum would reject every
-# push, and a guessed enum would accept a lie. Fill it with YOUR runtime's ids
-# before you run tools/hooks/setup.sh.
+# The ids below are the maintainer's own picker ids, shipped as a starting
+# point. Replace them with the ids YOUR runtime emits before you arm the gate:
+# an empty list rejects every push, and someone else's list accepts a model you
+# never ran. `tools/hooks/setup.sh` refuses to activate an empty list.
 #
 # Add-only for the first month: if two branches edit this file in parallel and
 # one deletes an entry, the merge conflicts and the gate feels like an obstacle.
 # If a model is missing, the hook names this file in the rejection — add it here.
-#
-# Examples (uncomment and replace with the ids your picker emits):
-# customendpoint/DeepSeek Flash/deepseek-chat
-# customendpoint/DeepSeek Pro/deepseek-reasoner
-# deepseek/deepseek-flash
-# openai/OpenAI/gpt-6-luna
+
+customendpoint/DeepSeek Flash/deepseek-chat
+customendpoint/DeepSeek Pro/deepseek-reasoner
+deepseek/deepseek-flash
+openai/OpenAI/gpt-6-luna
 none

@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Falsificador de tools/hooks/pre-push.
+"""Falsifier for tools/hooks/pre-push.
 
-Cada caso se construye en un repo git temporal y se ejerce por el protocolo real
-de pre-push (refs por stdin). El criterio no es solo el RC: se exige el mensaje
-de rechazo específico. Un hook roto por sintaxis también devuelve RC != 0, así
-que comparar solo RC da verde sobre un gate que no audita nada.
+HUELLA-TEST-PREPUSH-EN-20261023
 
-El falsificador se valida a sí mismo contra dos mutantes:
-  - exit 0 (acepta todo)  -> la suite falla por los casos que deben rechazar
-  - exit 1 (rechaza todo) -> la suite falla por los casos que deben pasar
+Every case is built in a temporary git repo and exercised through the real
+pre-push protocol (refs on stdin). The criterion is not the exit code alone: the
+specific rejection message is required. A hook broken by a syntax error also
+returns RC != 0, so comparing RC only goes green on a gate that audits nothing.
+
+The falsifier validates itself against two mutants:
+  - exit 0 (accept everything) -> the suite fails on the cases that must reject
+  - exit 1 (reject everything) -> the suite fails on the cases that must pass
 """
 
 from __future__ import annotations
@@ -24,31 +26,33 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 HOOK = REPO_ROOT / "tools" / "hooks" / "pre-push"
 MODELS = ["deepseek-4.1", "gpt-6-luna", "none"]
 
-# (id, descripción, mensaje, esperado, subcadena esperada en stderr)
+# (id, description, message, expected, expected substring in stderr)
 CASES = [
-    (1, "sin Model:", "cuerpo sin trailer\n", "reject", "sin Model:"),
-    (2, "1 Model valido trailer", "cuerpo\n\nModel: deepseek-4.1\n", "accept", None),
-    (3, "1 Model invalido", "cuerpo\n\nModel: best-model-ever\n", "reject", "no en models.txt"),
-    (4, "1 trailer + 1 prosa", "Model: gpt-6-luna en prosa\n\nModel: deepseek-4.1\n", "reject", "en prosa"),
-    (5, "2 trailers sin Squash-Reason", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\n", "reject", "Squash-Reason"),
-    (6, "2 trailers + 2 Squash-Reason", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: a\nSquash-Reason: b\n", "reject", "Squash-Reason"),
-    (7, "2 trailers + Squash-Reason vacio", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason:\n", "reject", "Squash-Reason"),
-    (8, "2 trailers + Squash-Reason valido", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: convenience\n", "accept", None),
-    (9, "violacion con diagnostico en stdout", "cuerpo\n", "reject", "sin Model:"),
-    (10, "Model: none en commit ordinario", "cuerpo\n\nModel: none\n", "reject", "Model: none no es válido"),
-    (11, "Squash-Reason vacio + 2 Model validos", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason:\n", "reject", "Squash-Reason"),
-    (12, "Model vacio + Model valido", "cuerpo\n\nModel:\nModel: deepseek-4.1\n", "reject", "vac"),
-    (13, "Model vacio solo", "cuerpo\n\nModel:\n", "reject", "vac"),
-    (14, "razon valida + razon vacia", "cuerpo\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: convenience\nSquash-Reason:\n", "reject", "Squash-Reason"),
-    # 15: git normaliza el espacio final del mensaje; sólo --cleanup=verbatim
-    # conserva "Model:   ", que es la única vía que ejerce la guarda de espacios.
-    (15, "Model: solo espacios (verbatim)", "cuerpo\n\nModel:   \n", "reject", "vac"),
-    # 16/17: flujo de squash. El squash real deja los Model: de cada commit como
-    # prosa e intercala sus asuntos: añadir un bloque final NO normaliza el mensaje.
-    (16, "squash mal normalizado (append)", "c4-squash\n\nModel: deepseek-4.1\n\nc5-squash\n\nModel: gpt-6-luna\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: agrupar\n", "reject", "en prosa"),
-    (17, "squash normalizado (reescritura)", "c4-squash\nc5-squash\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: agrupar fix y typo\n", "accept", None),
-    (18, "Model none en revert", "Revert \"cambio anterior\"\n\nModel: none\n", "accept", None),
-    (19, "Model none en automatización", "proceso automático\n\nModel: none\n", "accept", None),
+    (1, "no Model:", "body without a trailer\n", "reject", "missing Model:"),
+    (2, "1 valid Model trailer", "body\n\nModel: deepseek-4.1\n", "accept", None),
+    (3, "1 invalid Model", "body\n\nModel: best-model-ever\n", "reject", "is not in models.txt"),
+    (4, "1 trailer + 1 in prose", "Model: gpt-6-luna in prose\n\nModel: deepseek-4.1\n", "reject", "in the body (prose)"),
+    (5, "2 trailers without Squash-Reason", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\n", "reject", "Squash-Reason"),
+    (6, "2 trailers + 2 Squash-Reason", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: a\nSquash-Reason: b\n", "reject", "Squash-Reason"),
+    (7, "2 trailers + empty Squash-Reason", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason:\n", "reject", "Squash-Reason"),
+    (8, "2 trailers + valid Squash-Reason", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: convenience\n", "accept", None),
+    (9, "violation with the diagnostic on stdout", "body\n", "reject", "missing Model:"),
+    (10, "Model: none on an ordinary commit", "body\n\nModel: none\n", "reject", "Model: none is not valid"),
+    (11, "empty Squash-Reason + 2 valid Model", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason:\n", "reject", "Squash-Reason"),
+    (12, "empty Model + valid Model", "body\n\nModel:\nModel: deepseek-4.1\n", "reject", "is empty"),
+    (13, "whitespace-only Model", "body\n\nModel:\n", "reject", "is empty"),
+    (14, "valid reason + empty reason", "body\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: convenience\nSquash-Reason:\n", "reject", "Squash-Reason"),
+    # 15: git normalises the trailing space of the message; only --cleanup=verbatim
+    # preserves "Model:   ", which is the single path that exercises the
+    # whitespace guard.
+    (15, "whitespace-only Model: (verbatim)", "body\n\nModel:   \n", "reject", "is empty"),
+    # 16/17: squash flow. A real squash leaves each commit's Model: as prose and
+    # interleaves their subjects: appending a final block does NOT normalise the
+    # message.
+    (16, "badly normalised squash (append)", "c4-squash\n\nModel: deepseek-4.1\n\nc5-squash\n\nModel: gpt-6-luna\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: group\n", "reject", "in the body (prose)"),
+    (17, "normalised squash (rewrite)", "c4-squash\nc5-squash\n\nModel: deepseek-4.1\nModel: gpt-6-luna\nSquash-Reason: group fix and typo\n", "accept", None),
+    (18, "Model none on a revert", "Revert \"previous change\"\n\nModel: none\n", "accept", None),
+    (19, "Model none on automation", "automated process\n\nModel: none\n", "accept", None),
 ]
 
 VERBATIM_CASES = {15}
@@ -68,14 +72,14 @@ def _run_hook(repo: Path, hook: Path, sha: str, ref: str, shell: str = "bash") -
 
 
 class Fixture:
-    """Repo con tag hooks-epoch y un commit por caso, creado una vez."""
+    """Repo with a hooks-epoch tag and one commit per case, created once."""
 
     def __init__(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="hooks_fixture_"))
         self.repo = self.dir / "repo"
         (self.repo / "tools" / "hooks").mkdir(parents=True)
         (self.repo / "tools" / "hooks" / "models.txt").write_text(
-            "# enum de modelos (IDs del picker)\n" + "\n".join(MODELS) + "\n"
+            "# model allowlist (picker ids)\n" + "\n".join(MODELS) + "\n"
         )
         _git(self.repo, "init", "-q", "-b", "main", ".")
         _git(self.repo, "config", "user.email", "hook@test.local")
@@ -113,61 +117,61 @@ class TestPrePush(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if not HOOK.is_file():
-            raise unittest.SkipTest(f"hook ausente: {HOOK}")
+            raise unittest.SkipTest(f"hook missing: {HOOK}")
         cls.fx = Fixture()
 
     @classmethod
     def tearDownClass(cls) -> None:
         cls.fx.cleanup()
 
-    def test_casos_contra_hook_correcto(self) -> None:
+    def test_cases_against_the_correct_hook(self) -> None:
         for cid, desc, _msg, exp, sub in CASES:
-            with self.subTest(caso=cid, desc=desc):
+            with self.subTest(case=cid, desc=desc):
                 p = _run_hook(self.fx.repo, HOOK, self.fx.shas[cid], f"b{cid}")
                 if exp == "accept":
-                    self.assertEqual(p.returncode, 0, f"caso {cid} debía pasar: {p.stderr}")
-                    self.assertNotIn("RECHAZO", p.stderr, f"caso {cid} pasó con rechazo")
+                    self.assertEqual(p.returncode, 0, f"case {cid} should pass: {p.stderr}")
+                    self.assertNotIn("REJECTED", p.stderr, f"case {cid} passed with a rejection")
                 else:
-                    self.assertNotEqual(p.returncode, 0, f"caso {cid} debía rechazar")
-                    self.assertIn(sub, p.stderr, f"caso {cid}: mensaje inesperado: {p.stderr!r}")
+                    self.assertNotEqual(p.returncode, 0, f"case {cid} should reject")
+                    self.assertIn(sub, p.stderr, f"case {cid}: unexpected message: {p.stderr!r}")
 
-    def test_diagnostico_en_stdout_no_apaga_el_gate(self) -> None:
+    def test_stdout_diagnostic_does_not_turn_the_gate_off(self) -> None:
         p = _run_hook(self.fx.repo, HOOK, self.fx.shas[9], "b9")
         self.assertEqual(p.returncode, 1)
-        self.assertIn("SCANNED:", p.stdout, "el hook debe imprimir el diagnóstico")
+        self.assertIn("SCANNED:", p.stdout, "the hook must print its diagnostic")
 
-    def test_conteo_cero_bajo_set_eu(self) -> None:
-        # HUELLA-HOOKS-CASO-DIEZ-RECHAZA-20261022 — el caso 10 (`Model: none`
-        # en commit ordinario) ahora RECHAZA, asi que no puede medir una sonda
-        # cuyo criterio es `rc == 0`. Se ejerce sobre el caso 2 (un solo Model
-        # valido): deja en cero los recuentos de Squash-Reason, que es lo que
-        # `set -eu` mataba antes de acumular el RC.
+    def test_zero_count_under_set_eu(self) -> None:
+        # HUELLA-HOOKS-CASO-DIEZ-RECHAZA-20261022 — case 10 (`Model: none`
+        # on an ordinary commit) now REJECTS, so it cannot exercise a probe whose
+        # criterion is `rc == 0`. It runs on case 2 (a single valid Model), which
+        # leaves the Squash-Reason counts at zero — what `set -eu` used to kill
+        # before the exit code was accumulated.
         stdin = f"refs/heads/b2 {self.fx.shas[2]} refs/heads/b2 {'0' * 40}\n"
         p = subprocess.run(
             ["bash", "-eu", str(HOOK)],
             cwd=self.fx.repo, input=stdin, capture_output=True, text=True, check=False,
         )
-        self.assertEqual(p.returncode, 0, f"-eu abortó la auditoría: {p.stderr}")
+        self.assertEqual(p.returncode, 0, f"-eu aborted the audit: {p.stderr}")
 
-    def test_mutante_acepta_todo_falla_la_suite(self) -> None:
-        fallos_esperados = {cid for cid, _d, _m, exp, _s in CASES if exp == "reject"}
-        sobrevive = {
+    def test_accept_all_mutant_fails_the_suite(self) -> None:
+        expected_failures = {cid for cid, _d, _m, exp, _s in CASES if exp == "reject"}
+        survivors = {
             cid
-            for cid in fallos_esperados
+            for cid in expected_failures
             if _run_hook(self.fx.repo, self.fx.mutant_accept, self.fx.shas[cid], f"b{cid}").returncode == 0
         }
         self.assertEqual(
-            sobrevive, fallos_esperados, "el mutante exit 0 debe ser rechazado por todos los casos reject"
+            survivors, expected_failures, "the exit 0 mutant must be caught by every reject case"
         )
 
-    def test_mutante_rechaza_todo_falla_la_suite(self) -> None:
-        aceptados = {cid for cid, _d, _m, exp, _s in CASES if exp == "accept"}
-        matados = {
+    def test_reject_all_mutant_fails_the_suite(self) -> None:
+        accepted = {cid for cid, _d, _m, exp, _s in CASES if exp == "accept"}
+        killed = {
             cid
-            for cid in aceptados
+            for cid in accepted
             if _run_hook(self.fx.repo, self.fx.mutant_reject, self.fx.shas[cid], f"b{cid}").returncode != 0
         }
-        self.assertEqual(matados, aceptados, "el mutante exit 1 debe ser rechazado por todos los casos accept")
+        self.assertEqual(killed, accepted, "the exit 1 mutant must be caught by every accept case")
 
     EXEMPT = Path("tools") / "hooks" / "epoch-exempt.txt"
 
@@ -176,44 +180,44 @@ class TestPrePush(unittest.TestCase):
         p.write_text(text)
         return p
 
-    def test_exencion_declarada_salta_el_commit(self) -> None:
-        sha = self.fx.shas[1]  # mensaje sin Model:
-        p = self._exempt(f"{sha}\tmotivo declarado\n")
+    def test_declared_exemption_skips_the_commit(self) -> None:
+        sha = self.fx.shas[1]  # message with no Model:
+        p = self._exempt(f"{sha}\tdeclared reason\n")
         try:
             out = _run_hook(self.fx.repo, HOOK, sha, "b1")
-            self.assertEqual(out.returncode, 0, f"exento debía pasar: {out.stderr}")
-            self.assertIn("EXENTOS: 1", out.stdout)
-            self.assertNotIn("RECHAZO", out.stderr)
+            self.assertEqual(out.returncode, 0, f"an exempted commit should pass: {out.stderr}")
+            self.assertIn("EXEMPTED: 1", out.stdout)
+            self.assertNotIn("REJECTED", out.stderr)
         finally:
             p.unlink()
 
-    def test_sin_archivo_de_exenciones_el_gate_es_estricto(self) -> None:
+    def test_without_an_exemption_file_the_gate_is_strict(self) -> None:
         self.assertFalse((self.fx.repo / self.EXEMPT).exists())
         out = _run_hook(self.fx.repo, HOOK, self.fx.shas[1], "b1")
-        self.assertNotEqual(out.returncode, 0, "sin archivo de exenciones nada se exenta")
-        self.assertIn("sin Model:", out.stderr)
+        self.assertNotEqual(out.returncode, 0, "with no exemption file nothing is exempted")
+        self.assertIn("missing Model:", out.stderr)
 
-    def test_exencion_sin_razon_no_se_honra(self) -> None:
+    def test_exemption_without_a_reason_is_not_honoured(self) -> None:
         sha = self.fx.shas[1]
         p = self._exempt(f"{sha}\n")
         try:
             out = _run_hook(self.fx.repo, HOOK, sha, "b1")
-            self.assertNotEqual(out.returncode, 0, "una exención sin razón no puede pasar")
-            self.assertIn("sin Model:", out.stderr)
-            self.assertIn("EXENTOS: 0", out.stdout)
+            self.assertNotEqual(out.returncode, 0, "an exemption without a reason cannot pass")
+            self.assertIn("missing Model:", out.stderr)
+            self.assertIn("EXEMPTED: 0", out.stdout)
         finally:
             p.unlink()
 
-    def test_exencion_de_otro_sha_no_blanquea(self) -> None:
-        p = self._exempt(f"{self.fx.shas[2]}\texento en otro commit\n")
+    def test_exemption_for_another_sha_does_not_whitelist(self) -> None:
+        p = self._exempt(f"{self.fx.shas[2]}\texempted on another commit\n")
         try:
             out = _run_hook(self.fx.repo, HOOK, self.fx.shas[1], "b1")
-            self.assertNotEqual(out.returncode, 0, "la exención no puede ser global")
-            self.assertIn("sin Model:", out.stderr)
+            self.assertNotEqual(out.returncode, 0, "an exemption cannot be global")
+            self.assertIn("missing Model:", out.stderr)
         finally:
             p.unlink()
 
-    def test_commit_de_mecanismo_fuera_de_main(self) -> None:
+    def test_mechanism_commit_outside_main(self) -> None:
         repo = self.fx.repo
         _git(repo, "checkout", "-q", "-B", "bmec", "hooks-epoch")
         (repo / "docs").mkdir(exist_ok=True)
@@ -224,25 +228,25 @@ class TestPrePush(unittest.TestCase):
         _git(repo, "commit", "-q", "-F", str(msg))
         sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
         out = _run_hook(repo, HOOK, sha, "bmec")
-        self.assertNotEqual(out.returncode, 0, "un commit de mecanismo fuera de main debe rechazar")
-        self.assertIn("fuera_de_main", out.stderr)
+        self.assertNotEqual(out.returncode, 0, "a mechanism commit outside main must reject")
+        self.assertIn("outside_main", out.stderr)
 
-    def test_espacios_requieren_verbatim(self) -> None:
+    def test_spaces_require_verbatim(self) -> None:
         verbatim = _git(self.fx.repo, "log", "-1", "--format=%B", self.fx.shas[15]).stdout
-        self.assertIn("Model:   ", verbatim, "--cleanup=verbatim debe conservar el espacio")
+        self.assertIn("Model:   ", verbatim, "--cleanup=verbatim must preserve the space")
 
-        # Sin verbatim, git normaliza "Model:   " a "Model:" y el caso colapsa en el 13:
-        # la guarda de espacios no se ejerce por la vía normal.
+        # Without verbatim, git normalises "Model:   " to "Model:" and the case
+        # collapses into 13: the whitespace guard is not exercised the normal way.
         msg_file = self.fx.dir / "msg15normal"
-        msg_file.write_text("cuerpo\n\nModel:   \n")
+        msg_file.write_text("body\n\nModel:   \n")
         _git(self.fx.repo, "checkout", "-q", "-B", "b15n", "hooks-epoch")
         _git(self.fx.repo, "commit", "-q", "--allow-empty", "-F", str(msg_file))
         sha = _git(self.fx.repo, "rev-parse", "HEAD").stdout.strip()
         normal = _git(self.fx.repo, "log", "-1", "--format=%B", sha).stdout
-        self.assertNotIn("Model:   ", normal, "git normalizó el espacio")
+        self.assertNotIn("Model:   ", normal, "git normalised the space")
         self.assertEqual(normal, _git(self.fx.repo, "log", "-1", "--format=%B", self.fx.shas[13]).stdout)
 
-        self.assertIn("RECHAZO", _run_hook(self.fx.repo, HOOK, self.fx.shas[15], "b15").stderr)
+        self.assertIn("REJECTED", _run_hook(self.fx.repo, HOOK, self.fx.shas[15], "b15").stderr)
 
 
 if __name__ == "__main__":

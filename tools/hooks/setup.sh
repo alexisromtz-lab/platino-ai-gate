@@ -1,38 +1,46 @@
 #!/usr/bin/env bash
-# Activa los hooks del repo y verifica que la época y el enum existan.
-# Sin este paso, tools/hooks/pre-push existe y nunca corre.
+# Activates the repo's hooks and verifies that the epoch and the allowlist exist.
+# Without this step tools/hooks/pre-push exists and never runs.
+#
+# HUELLA-SETUP-EN-20261023
 set -euo pipefail
 
-# Se resuelve desde la ubicación del script, no desde el cwd: invocarlo por ruta
-# desde otro repo configuraría el repo equivocado.
+# Resolved from the script's own location, not from cwd: invoking it by path from
+# another repo would configure the wrong repo.
 ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 cd "$ROOT"
 
 git rev-parse -q --verify 'refs/tags/hooks-epoch^{commit}' >/dev/null || {
-  echo "hooks-epoch ausente: el gate no tiene frontera declarada." >&2
-  echo "Se crea en el commit de adopción: git tag hooks-epoch <sha>" >&2
+  echo "hooks-epoch tag missing: the gate has no declared boundary." >&2
+  echo "It is created at the adoption commit: git tag hooks-epoch <sha>" >&2
   exit 1
 }
 
 [ -f tools/hooks/models.txt ] || {
-  echo "tools/hooks/models.txt ausente: el gate rechazaría todo push." >&2
+  echo "tools/hooks/models.txt is missing: the gate would reject every push." >&2
   exit 1
 }
 
-# Un hook sin bit de ejecución existe y nunca corre: el gate se cree activo y no
-# muerde. Se exige el bit en los dos, no solo en pre-push.
+if ! grep -qv '^\s*\(#\|$\)' tools/hooks/models.txt; then
+  echo "tools/hooks/models.txt has no ids: the gate would reject every push." >&2
+  echo "Add at least one id exactly as your model picker emits it." >&2
+  exit 1
+fi
+
+# A hook without the executable bit exists and never runs: the gate looks armed
+# and never bites. The bit is required on both, not only on pre-push.
 # HUELLA-SETUP-EXIGE-EJECUTABLE-20261022
 for h in pre-push commit-msg; do
   [ -x "tools/hooks/$h" ] || {
-    echo "tools/hooks/$h no es ejecutable: el gate no correría." >&2
-    echo "Arreglo: chmod +x tools/hooks/$h && git update-index --chmod=+x tools/hooks/$h" >&2
+    echo "tools/hooks/$h is not executable: the gate would not run." >&2
+    echo "Fix: chmod +x tools/hooks/$h && git update-index --chmod=+x tools/hooks/$h" >&2
     exit 1
   }
 done
 
-# Se activa al final: si algo falta, el repo queda como estaba.
+# Activated last: if anything is missing, the repo is left as it was.
 git config core.hooksPath tools/hooks
 
-echo "hooks activos: core.hooksPath=$(git config --get core.hooksPath)"
+echo "hooks active: core.hooksPath=$(git config --get core.hooksPath)"
 echo "epoch: $(git rev-parse --short 'refs/tags/hooks-epoch^{commit}')"
-printf 'modelos: '; grep -cv '^\s*\(#\|$\)' tools/hooks/models.txt
+printf 'models: '; grep -cv '^\s*\(#\|$\)' tools/hooks/models.txt

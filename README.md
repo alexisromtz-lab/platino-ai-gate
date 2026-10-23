@@ -45,6 +45,19 @@ Model: deepseek/deepseek-flash
 
 `commit-msg` is the cheap bite. `pre-push` is the hard one: it scans every non-merge commit in `hooks-epoch..HEAD` and fails the push.
 
+## ⚠️ Step 0 — before you install
+
+> **Add your AI model ids to `tools/hooks/models.txt` first.**
+> The file ships with the maintainer's ids. If you arm the gate without replacing them, every commit you make with a model that is not on that list is rejected — and the gate is doing exactly what it was told to do.
+>
+> ```bash
+> $EDITOR tools/hooks/models.txt    # one id per line, exactly as your picker emits it
+> ```
+>
+> `setup.sh` refuses to activate a list with no ids, so you cannot arm a gate that would reject everything. It cannot tell whether the ids are *yours*, though — that part is on you.
+
+<!-- HUELLA-README-STEP0-20261023 -->
+
 ## Install
 
 ```bash
@@ -64,7 +77,7 @@ bash tools/hooks/setup.sh
 
 `setup.sh` refuses to configure anything if the epoch tag is missing, if `models.txt` is missing, or if either hook lost its executable bit — a hook that exists but cannot run is a gate you believe is armed. It sets `core.hooksPath` **last**, so a repo never ends up half-configured.
 
-> **Note on language:** the hook's rejection messages are in Spanish (that is how they ship from upstream). The logic, the enum and the exit codes are language-independent; translate the `echo` lines if you need English output.
+> **Note on language:** the hook's rejection messages are in English, and so are the comments — they are the part of the gate a new contributor reads first. The logic, the enum and the exit codes are language-independent; translate the `echo` lines if your team works in another language.
 
 ## `models.txt` — the allowlist
 
@@ -75,10 +88,11 @@ openai/OpenAI/gpt-6-luna
 none
 ```
 
-Three rules that came from being bitten:
+Four rules that came from being bitten:
 
 - **IDs, not display names.** `openai/OpenAI/gpt-6-luna`, not "GPT-6 Luna". The hook compares literally; a transcribed id is a rejected commit.
-- **Ship it non-empty.** An empty enum rejects every push. The file in this repo ships with only `none` on purpose: fill it before you activate.
+- **Ship it non-empty.** An empty enum rejects every push, which is why `setup.sh` refuses to activate one. The file in this repo ships with the maintainer's ids as a starting point.
+- **Not somebody else's list.** An id you never ran is a lie the gate will happily accept. Replace the shipped ids with the ones your own picker emits.
 - **Add-only for the first month.** If two branches edit the file and one deletes an entry, the merge conflicts and the gate starts feeling like an obstacle. Deletions come later, deliberately.
 
 ## Exemptions
@@ -126,7 +140,7 @@ Two mutants are part of the suite: a hook that accepts everything must fail it, 
 
 Extracted from the measured corpus of **[platino-labs](https://github.com/alexisromtz-lab/platino-labs)** — an instrumented repository where every claim ships with the command that produced it. The corpus itself is archived at **[doi.org/10.5281/zenodo.23288831](https://doi.org/10.5281/zenodo.23288831)**.
 
-The hooks are published here verbatim, including the comments that record *why* each guard exists: the `cmd | while …; exit 1` that loses the exit code inside a subshell, the `grep -c` that aborts under `set -e` with zero matches, the `# Model: …` template line that would sign the commit by itself, the `interpret-trailers` value trimming that makes trailing spaces valid in both gates. Those are the bugs the gate already paid for. Take them for free.
+The hooks are published here with their comments intact (translated to English), including the ones that record *why* each guard exists: the `cmd | while …; exit 1` that loses the exit code inside a subshell, the `grep -c` that aborts under `set -e` with zero matches, the `# Model: …` template line that would sign the commit by itself, the `interpret-trailers` value trimming that makes trailing spaces valid in both gates. Those are the bugs the gate already paid for. Take them for free.
 
 ## License
 

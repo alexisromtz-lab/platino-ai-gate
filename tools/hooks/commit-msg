@@ -1,63 +1,66 @@
 #!/usr/bin/env bash
-# Gate de atribución en el acto de crear: el mismo contrato que pre-push.
+# Attribution gate at the moment of creation: the same contract as pre-push.
 #
 # HUELLA-COMMITMSG-MODEL-20261022
+# HUELLA-COMMITMSG-EN-20261023
 #
-# Por qué existe: pre-push descubre la falta de Model: cuando el commit ya está
-# en la historia. El coste de arreglarlo ahí es reescribir todos los commits
-# posteriores (medido 2026-10-22: 11 commits de 6 sesiones re-hasheados, con las
-# referencias de las demás pestañas rotas). Aquí el coste es reescribir un
-# mensaje. Un gate que muerde al principio no tiene que limpiar nada.
+# Why it exists: pre-push discovers a missing Model: trailer once the commit is
+# already in history. Fixing it there means rewriting every later commit
+# (measured 2026-10-22: 11 commits from 6 sessions rehashed, with references
+# held by other workstreams broken). Here the cost is rewriting one message. A
+# gate that bites early never has to clean up.
 #
-# Qué NO hace: no valida el contenido, no ejecuta tests, no toca el índice. Si
-# el mensaje pasa, el commit sigue su curso normal.
+# What it does NOT do: it does not validate content, does not run tests, does not
+# touch the index. If the message passes, the commit proceeds as usual.
 #
-# Bypass: `git commit --no-verify` salta este hook (git no lo invoca). No es una
-# puerta trasera silenciosa: pre-push sigue siendo el gate duro y rechaza el
-# push. El bypass solo cambia CUÁNDO se descubre, no SI se descubre.
+# Bypass: `git commit --no-verify` skips this hook (git never invokes it). It is
+# not a silent back door: pre-push is still the hard gate and refuses the push.
+# The bypass only changes WHEN the omission is found, not WHETHER it is found.
 #
-# Merges: se saltan, igual que pre-push los salta con --no-merges. Un merge no
-# lo escribió un modelo y exigirle Model: empujaría a desactivar el hook.
+# Merges: skipped, just as pre-push skips them with --no-merges. A merge was not
+# written by a model, and demanding Model: from it would push people to disable
+# the hook.
 #
-# Lo que NO debe hacerse (ya mordió en pre-push): `cmd | while ...; exit 1` mata
-# el subshell y el RC se pierde; `grep -c` con 0 matches aborta bajo set -e. Los
-# recuentos van con awk sobre el mensaje ya limpio de comentarios.
+# What must NOT be done (already bit in pre-push): `cmd | while ...; exit 1` kills
+# the subshell and the exit code is lost; `grep -c` with zero matches aborts
+# under set -e. Every count runs awk over the message already stripped of
+# comments.
 set -uo pipefail
 
 MSG="${1:-}"
 if [ -z "$MSG" ] || [ ! -f "$MSG" ]; then
-  echo "commit-msg: falta el archivo de mensaje (git pasa la ruta como \$1)." >&2
+  echo "commit-msg: missing message file (git passes the path as \$1)." >&2
   exit 1
 fi
 
 ROOT=$(git rev-parse --show-toplevel) || exit 1
 MODELS_FILE="$ROOT/tools/hooks/models.txt"
 if [ ! -f "$MODELS_FILE" ]; then
-  echo "RECHAZO commit-msg: tools/hooks/models.txt ausente; el enum no existe." >&2
+  echo "REJECTED commit-msg: tools/hooks/models.txt is missing; the allowlist does not exist." >&2
   exit 1
 fi
 
-# Un merge en curso no lleva Model: (misma frontera que --no-merges en pre-push).
+# A merge in progress carries no Model: (same boundary as --no-merges in pre-push).
 GITDIR=$(git rev-parse --git-dir) || exit 1
 if [ -f "$GITDIR/MERGE_HEAD" ]; then
   exit 0
 fi
 
-# git limpia las líneas de comentario después del hook: si no se limpian antes,
-# un `# Model: x` de la plantilla contaría como trailer y firmaría el commit.
-LIMPIO=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX") || exit 1
-trap 'rm -f "$LIMPIO"' EXIT
-awk '/^#/ { next } { print }' "$MSG" > "$LIMPIO"
+# git strips comment lines after the hook runs: if they are not stripped first, a
+# `# Model: x` line from the template counts as a trailer and signs the commit.
+CLEAN=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX") || exit 1
+trap 'rm -f "$CLEAN"' EXIT
+awk '/^#/ { next } { print }' "$MSG" > "$CLEAN"
 
-TR=$(git interpret-trailers --parse < "$LIMPIO")
+TR=$(git interpret-trailers --parse < "$CLEAN")
 
-n_all=$(awk '/^Model:/ { c++ } END { print c+0 }' "$LIMPIO")
+n_all=$(awk '/^Model:/ { c++ } END { print c+0 }' "$CLEAN")
 n_tr=$(printf '%s\n' "$TR" | awk -F': ' '/^Model:/ && $2 ~ /[^[:space:]]/ { c++ } END { print c+0 }')
 n_tr_empty=$(printf '%s\n' "$TR" | awk -F': ' '/^Model:/ && $2 !~ /[^[:space:]]/ { c++ } END { print c+0 }')
 n_sq=$(printf '%s\n' "$TR" | awk -F': ' '/^Squash-Reason:/ && $2 ~ /[^[:space:]]/ { c++ } END { print c+0 }')
 n_sq_empty=$(printf '%s\n' "$TR" | awk -F': ' '/^Squash-Reason:/ && $2 !~ /[^[:space:]]/ { c++ } END { print c+0 }')
 
-es_bot_email() {
+is_bot_email() {
   local email
   email=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
   case "$email" in
@@ -66,48 +69,48 @@ es_bot_email() {
   esac
 }
 
-rechazo() {
-  echo "RECHAZO commit-msg: $1" >&2
+reject() {
+  echo "REJECTED commit-msg: $1" >&2
   echo "" >&2
-  echo "El trailer Model: declara qué modelo escribió el commit. Va en el BLOQUE" >&2
-  echo "FINAL del mensaje (último párrafo, junto a Co-authored-by), no en el cuerpo," >&2
-  echo "y sin línea en blanco por medio. IDs válidos ($MODELS_FILE):" >&2
+  echo "The Model: trailer declares which model wrote the commit. It goes in the" >&2
+  echo "FINAL block of the message (last paragraph, next to Co-authored-by), not in" >&2
+  echo "the body, and with no blank line in between. Valid ids ($MODELS_FILE):" >&2
   grep -v '^[[:space:]]*\(#\|$\)' "$MODELS_FILE" | sed 's/^/  /' >&2
   echo "" >&2
-  echo "Ejemplo:" >&2
-  echo "  git commit -m \"asunto\" -m \"Model: deepseek/deepseek-flash\"" >&2
-  echo "  git commit --amend            # si el commit ya se creó" >&2
+  echo "Example:" >&2
+  echo "  git commit -m \"subject\" -m \"Model: deepseek/deepseek-flash\"" >&2
+  echo "  git commit --amend            # if the commit already exists" >&2
   exit 1
 }
 
 if [ "$n_all" -eq 0 ]; then
-  rechazo "el mensaje no declara Model:."
+  reject "the message does not declare a Model: trailer."
 fi
 if [ "$n_all" -ne $((n_tr + n_tr_empty)) ]; then
-  rechazo "Model: aparece en prosa (líneas=$n_all trailers=$((n_tr + n_tr_empty))): git solo lee el último párrafo."
+  reject "Model: is in the body (prose), not in the final trailer block (lines=$n_all trailers=$((n_tr + n_tr_empty)))."
 fi
 if [ "$n_tr_empty" -gt 0 ]; then
-  rechazo "Model: está vacío."
+  reject "Model: is empty."
 fi
 if [ "$n_tr" -gt 1 ] && { [ "$n_sq" -ne 1 ] || [ "$n_sq_empty" -ne 0 ]; }; then
-  rechazo "varios Model: exigen exactamente un Squash-Reason: no vacío (ok=$n_sq vacíos=$n_sq_empty modelos=$n_tr)."
+  reject "multiple Model: trailers require exactly one non-empty Squash-Reason: (ok=$n_sq empty=$n_sq_empty models=$n_tr)."
 fi
 
 if printf '%s\n' "$TR" | awk -F': ' '$1 == "Model" && $2 == "none" { found=1 } END { exit(found ? 0 : 1) }'; then
-  subject=$(sed -n '/[^[:space:]]/{p;q;}' "$LIMPIO")
+  subject=$(sed -n '/[^[:space:]]/{p;q;}' "$CLEAN")
   author_email=${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}
-  if [[ "$subject" != Revert\ * ]] && ! es_bot_email "$author_email"; then
-    rechazo "Model: none no es válido para un commit con código. Declara tu modelo real."
+  if [[ "$subject" != Revert\ * ]] && ! is_bot_email "$author_email"; then
+    reject "Model: none is not valid for a commit with code. Declare the model that actually wrote it."
   fi
 fi
 
-printf '%s\n' "$TR" | awk -F': ' '/^Model:/ { print $2 }' > "$LIMPIO.modelos"
+printf '%s\n' "$TR" | awk -F': ' '/^Model:/ { print $2 }' > "$CLEAN.models"
 while IFS= read -r m; do
   grep -qxF -- "$m" "$MODELS_FILE" || {
-    rm -f "$LIMPIO.modelos"
-    rechazo "Model '$m' no está en models.txt (se copia del picker, no se transcribe)."
+    rm -f "$CLEAN.models"
+    reject "Model '$m' is not in models.txt (copy it from the picker, do not retype it)."
   }
-done < "$LIMPIO.modelos"
-rm -f "$LIMPIO.modelos"
+done < "$CLEAN.models"
+rm -f "$CLEAN.models"
 
 exit 0
