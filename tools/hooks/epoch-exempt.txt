@@ -1,0 +1,10 @@
+# Declared exemptions from the pre-push gate. One line per SHA:
+#
+#   <full-sha>	TAB	<written reason>
+#
+# A line without a reason, or with the SHA in another field, is NOT honoured:
+# an exemption cannot enter without a written motive, and never by prefix match.
+# The absence of this file means "no exemptions" — the gate stays strict, never
+# laxer.
+#
+# Use it only for history that predates the gate and cannot be rewritten.

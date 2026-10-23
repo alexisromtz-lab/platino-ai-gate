@@ -1,0 +1,26 @@
+# Enum of models accepted in the Model: trailer.
+#
+# One entry per model, written as the EXACT id your model picker emits
+# (openai/OpenAI/gpt-6-luna), NOT the display name ("ChatGPT 6 Luna").
+# The hook compares literally: copy it from the picker, do not retype it.
+#
+# Rules the hook enforces with this file:
+#   - a Model: value that is not listed here is rejected;
+#   - `none` is accepted only for merges (pre-push skips --no-merges), reverts
+#     and bots/automations identified by the author email. Any other commit,
+#     even an empty one, must declare a real model.
+#
+# This file ships with only `none` on purpose: an empty enum would reject every
+# push, and a guessed enum would accept a lie. Fill it with YOUR runtime's ids
+# before you run tools/hooks/setup.sh.
+#
+# Add-only for the first month: if two branches edit this file in parallel and
+# one deletes an entry, the merge conflicts and the gate feels like an obstacle.
+# If a model is missing, the hook names this file in the rejection — add it here.
+#
+# Examples (uncomment and replace with the ids your picker emits):
+# customendpoint/DeepSeek Flash/deepseek-chat
+# customendpoint/DeepSeek Pro/deepseek-reasoner
+# deepseek/deepseek-flash
+# openai/OpenAI/gpt-6-luna
+none
