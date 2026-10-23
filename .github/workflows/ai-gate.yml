@@ -12,7 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run the falsifiers
-        run: python3 -m pytest tools/hooks/tests -q
+        run: |
+          cd tools/hooks/tests
+          python3 -m unittest discover -v
 
   self-test:
     name: live gate in a scratch repo

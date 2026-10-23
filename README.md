@@ -115,8 +115,10 @@ For the smallest adopter check, the hook reads its ref list on stdin exactly as 
 The suite exercises the hooks the way git does — the message file as `$1`, the ref list on stdin — and asserts the **specific** rejection reason, not just a non-zero exit (a hook broken by a syntax error also exits non-zero).
 
 ```bash
-python3 -m pytest tools/hooks/tests -q
+cd tools/hooks/tests && python3 -m unittest discover -v      # 16 tests
 ```
+
+Standard library only: no network, no pytest, nothing to install beyond `python3`. `pytest tools/hooks/tests -q` also works if you already have it; CI uses `unittest` so the suite carries no dependency of its own.
 
 Two mutants are part of the suite: a hook that accepts everything must fail it, and a hook that rejects everything must fail it. If both mutants pass, the tests are not testing anything.
 
