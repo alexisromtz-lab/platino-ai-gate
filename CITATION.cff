@@ -13,7 +13,8 @@ authors:
     orcid: "https://orcid.org/0009-0001-9116-075X"
 version: "1.0.3"
 date-released: "2026-10-23"
-# HUELLA-CITATION-103-20261023
+doi: "10.5281/zenodo.23605799"
+# HUELLA-CITATION-ZENODO-DOI-20261023
 license: Apache-2.0
 repository-code: "https://github.com/alexisromtz-lab/platino-ai-gate"
 url: "https://github.com/alexisromtz-lab/platino-ai-gate"

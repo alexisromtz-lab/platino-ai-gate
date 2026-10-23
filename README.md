@@ -1,6 +1,8 @@
 # Enforce AI Attribution in Git Commits (Stop Lying with Model: none)
 
 [![ai-gate](https://github.com/alexisromtz-lab/platino-ai-gate/actions/workflows/ai-gate.yml/badge.svg)](https://github.com/alexisromtz-lab/platino-ai-gate/actions/workflows/ai-gate.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23605799.svg)](https://doi.org/10.5281/zenodo.23605799)
+<!-- HUELLA-README-ZENODO-BADGE-20261023 -->
 
 Two git hooks that make every commit declare **which AI model wrote it** — and reject the one value that makes the declaration worthless.
 
@@ -138,7 +140,7 @@ Two mutants are part of the suite: a hook that accepts everything must fail it, 
 
 ## Cite this
 
-Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) — GitHub renders a "Cite this repository" button from it, and Zenodo mints a DOI per release from the same file. Cite the release you actually ran, not `main`: a gate whose rules changed under you is not the gate you audited.
+Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) — GitHub renders a "Cite this repository" button from it. The concept DOI is [10.5281/zenodo.23605799](https://doi.org/10.5281/zenodo.23605799); this release, v1.0.3, has the version DOI [10.5281/zenodo.23605955](https://doi.org/10.5281/zenodo.23605955). Cite the release you actually ran, not `main`: a gate whose rules changed under you is not the gate you audited.
 
 <!-- HUELLA-README-CITE-20261023 -->
 
