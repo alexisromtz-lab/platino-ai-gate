@@ -136,6 +136,12 @@ Standard library only: no network, no pytest, nothing to install beyond `python3
 
 Two mutants are part of the suite: a hook that accepts everything must fail it, and a hook that rejects everything must fail it. If both mutants pass, the tests are not testing anything.
 
+## Cite this
+
+Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) — GitHub renders a "Cite this repository" button from it, and Zenodo mints a DOI per release from the same file. Cite the release you actually ran, not `main`: a gate whose rules changed under you is not the gate you audited.
+
+<!-- HUELLA-README-CITE-20261023 -->
+
 ## Where this comes from
 
 Extracted from the measured corpus of **[platino-labs](https://github.com/alexisromtz-lab/platino-labs)** — an instrumented repository where every claim ships with the command that produced it. The corpus itself is archived at **[doi.org/10.5281/zenodo.23288831](https://doi.org/10.5281/zenodo.23288831)**.
