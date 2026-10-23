@@ -97,7 +97,7 @@ No reason, no exemption. Wrong field, no exemption. Prefix matches are not honou
 
 CI is the enforcement point that cannot be skipped locally. This repository runs [`.github/workflows/ai-gate.yml`](.github/workflows/ai-gate.yml) on every push and pull request, in two jobs you can copy as-is:
 
-- **`tests`** — the falsifier suite: `python3 -m pytest tools/hooks/tests -q`.
+- **`tests`** — the falsifier suite: `cd tools/hooks/tests && python3 -m unittest discover -v`.
 - **`self-test`** — copies the gate into a scratch repo, activates it with `setup.sh`, and then tries every lie in order: `Model: none`, no trailer, an id outside the allowlist, a trailer buried in prose. All four must be rejected, a declared commit must pass, `pre-push` must pass on that history, and a commit made with `--no-verify` must still be blocked at push time.
 
 For the smallest adopter check, the hook reads its ref list on stdin exactly as git supplies it:
